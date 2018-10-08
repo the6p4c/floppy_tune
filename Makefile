@@ -8,6 +8,12 @@ clean:
 run:
 	qemu-system-i386 -drive format=raw,file=floppy.img -soundhw sb16
 
+run_debug:
+	qemu-system-i386 -drive format=raw,file=floppy.img -soundhw sb16 -s -S
+
+run_gdb:
+	gdb --eval-command="target remote localhost:1234" --eval-command="set architecture i8086"
+
 floppy.img: boot.bin music/
 	# build floppy image
 	dd if=/dev/zero of=floppy.img bs=1024 count=1440
