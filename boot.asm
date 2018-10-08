@@ -29,7 +29,17 @@ nop
 TIMES 30 - ($ - $$) db 0x00
 
 _start:
-	; DSP reset
+	call dsp_reset
+	call waveform_build
+	call dma_configure
+	call dsp_play
+
+; stop the machine
+halt:
+	hlt
+	jmp halt
+
+dsp_reset:
 	mov dx, DSP_RESET
 	mov al, 1
 	out dx, al ; write the 1
@@ -42,26 +52,25 @@ _start:
 	xor al, al
 	out dx, al ; write the 0
 
-	; 1. build waveform
+	ret
+
+waveform_build:
 	push 0x7D0
 	pop es
 .loop:
 	mov ax, si
-	shr ax, 5
+	shr ax, 6
 	and ax, 1
 	shl ax, 7
 	mov [es:si], ax
 	inc si
 
-	cmp si, 22050
+	cmp si, 128
 	jne .loop
 
-	; 4. turn on speaker
-	mov dx, DSP_WRITE
-	mov al, 0xD1
-	out dx, al
+	ret
 
-	; 5. program DMA controller
+dma_configure:
 	; disable dma channel
 	mov dx, DMAC1_MASK
 	mov al, 0x4 | 1 ; ch 1
@@ -85,9 +94,9 @@ _start:
 
 	; write transfer length - 1
 	mov dx, DMAC1_CH1_COUNT
-	mov al, (22050 - 1) & 0xFF
+	mov al, (128 - 1) & 0xFF
 	out dx, al
-	mov al, ((22050 - 1) >> 8) & 0xFF
+	mov al, ((128 - 1) >> 8) & 0xFF
 	out dx, al
 
 	; write buffer page
@@ -100,7 +109,9 @@ _start:
 	mov al, 1 ; ch 1
 	out dx, al
 
-	; 6. set DSP sample rate
+	ret
+
+dsp_play:
 	mov dx, DSP_WRITE
 	mov al, 0x41
 	out dx, al
@@ -109,40 +120,20 @@ _start:
 	mov al, 0x22
 	out dx, al
 
-	; 7. set dsp block size
-	mov al, 0x48
-	out dx, al
-	mov al, (22050/2 - 1) & 0xFF
-	out dx, al
-	mov al, ((22050/2 - 1) >> 8) & 0xFF
-	out dx, al
-
-	; ?? set dma 1 as chan
-	mov dx, DSP_MXR_ADDR
-	mov al, 0x81
-	out dx, al
-	mov dx, DSP_MXR_DATA
-	mov al, 2
-	out dx, al
-
 	mov dx, DSP_WRITE
 	mov al, 0xC6
 	out dx, al
 	xor al, al
 	out dx, al
-	mov al, (22050 - 1) & 0xFF
+	mov al, (128 - 1) & 0xFF
 	out dx, al
-	mov al, ((22050 - 1) >> 8) & 0xFF
+	mov al, ((128 - 1) >> 8) & 0xFF
 	out dx, al
 
-	; 8. start xfr
 	mov al, 0x1C
 	out dx, al
 
-; stop the machine
-halt:
-	hlt
-	jmp halt
+	ret
 
 ; ensure we're bootable - mkfs.vfat already puts this here, but we copy this
 ; part of boot.bin anyway so it's probably a good idea to do it ourselves
