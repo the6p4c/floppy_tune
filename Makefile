@@ -19,7 +19,7 @@ floppy.img: boot.bin music/
 	dd if=/dev/zero of=floppy.img bs=1024 count=1440
 	mkfs.vfat -F 12 floppy.img
 	dd conv=notrunc if=boot.bin of=floppy.img bs=1 count=3 # jmp
-	dd conv=notrunc if=boot.bin skip=30 of=floppy.img seek=30 bs=1 count=482 # bootstrap
+	dd conv=notrunc if=boot.bin skip=62 of=floppy.img seek=62 bs=1 count=448 # bootstrap
 
 	# mount and copy over the audio files
 	sudo mount -o loop,umask=000 floppy.img $(FLOPPY_MNT_DIR)

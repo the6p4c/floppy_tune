@@ -8,7 +8,7 @@ nop
 ; fill the boot binary with 0s until the bootstrap region of the FAT header
 ; this won't be copied into the floppy image, but it just here so the code below
 ; starts at the right org and address in the file
-TIMES 30 - ($ - $$) db 0x00
+TIMES 62 - ($ - $$) db 0x00
 
 _start:
 	call dsp_demo
