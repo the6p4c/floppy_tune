@@ -6,10 +6,10 @@ clean:
 	rm -f floppy.img boot.bin
 
 run:
-	qemu-system-i386 -drive format=raw,file=floppy.img -soundhw sb16
+	qemu-system-i386 -drive file=floppy.img,if=floppy,index=0,format=raw -soundhw sb16
 
 run_debug:
-	qemu-system-i386 -drive format=raw,file=floppy.img -soundhw sb16 -s -S
+	qemu-system-i386 -drive file=floppy.img,if=floppy,index=0,format=raw -soundhw sb16 -s -S
 
 run_gdb:
 	gdb --eval-command="target remote localhost:1234" --eval-command="set architecture i8086"
