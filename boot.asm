@@ -31,10 +31,10 @@ _start:
 	inc ah ; ah = sector
 
 	; read sector
-	; read to 0:0x100 = 0x100
-	xor bx, bx
-	mov es, bx
+	; read to 0x100:0 = 0x100
 	mov bx, 0x100
+	mov es, bx
+	xor bx, bx
 
 	xor ch, ch ; cylinder 0
 	mov dh, al ; head number
@@ -44,6 +44,42 @@ _start:
 
 	mov ah, 0x02
 	int 0x13
+
+	mov bx, 0x100
+	mov es, bx
+	xor bx, bx
+
+	push 0xB800
+	pop gs
+	xor di, di
+
+.read_entry:
+	mov al, [es:bx]
+	cmp al, 0
+	je .read_entry_done
+	cmp al, 0xE5
+	je .next_entry
+
+	push bx
+	mov cl, 8+3
+	mov ah, 0xF0
+.print_loop
+	mov al, [es:bx]
+	mov [gs:di], ax
+	
+	inc bx
+	add di, 2
+	dec cl
+	jnz .print_loop
+	pop bx
+	mov al, ' '
+	mov [gs:di], ax
+	add di, 2
+	
+.next_entry:
+	add bx, 32
+	jmp .read_entry
+.read_entry_done:
 
 halt:
 	hlt
