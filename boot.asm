@@ -86,12 +86,22 @@ _start:
 	; cylinder already set
 	mov dh, al ; head number
 	mov cl, ah ; sector number
-	mov al, 1 ; read 1 sector
+	mov al, byte [fat_spc] ; read the whole cluster
 	mov dl, byte [drive_number] ; read from boot drive
 
 	mov ah, 0x02
 	int 0x13
 
+	; Print the cluster contents
+	mov al, 1 ; write mode - update cursor, no attributes
+	mov bh, 0 ; page number 0
+	mov bl, 0x0F ; attribute
+	mov cx, (80 * 24) ; number of chars (fill screen)
+	xor dx, dx ; print at 0,0
+	mov bp, 0 ; string address (es already set)
+
+	mov ah, 0x13
+	int 0x10
 .halt:
 	hlt
 	jmp .halt
