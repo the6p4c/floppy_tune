@@ -73,15 +73,24 @@ _start:
 	add bx, 26 ; no issue mangling the entry pointer
 	mov ax, word [es:bx]
 
+	mov word [current_cluster], ax
+	mov byte [current_cluster_count], 0
+
+.read_cluster:
+	; Read into RAM starting from address 0x10000
+	; Since each sector is 0x200 long, we can just add ccc * 0x20 to the seg
+	xor ax, ax
+	mov al, byte [current_cluster_count]
+	shl ax, 5
+	mov bx, 0x1000
+	add ax, bx
+	mov es, ax
+	xor bx, bx
+
 	; Convert CN to CHS
+	mov ax, word [current_cluster]
 	call cn_to_lsn
 	call lsn_to_chs
-
-	; Read the first cluster into RAM
-	; Read to 0x120:0 = 0x1200
-	mov bx, 0x120
-	mov es, bx
-	xor bx, bx
 
 	; cylinder already set
 	mov dh, al ; head number
@@ -92,16 +101,77 @@ _start:
 	mov ah, 0x02
 	int 0x13
 
-	; Print the cluster contents
-	mov al, 1 ; write mode - update cursor, no attributes
-	mov bh, 0 ; page number 0
-	mov bl, 0x0F ; attribute
-	mov cx, (80 * 24) ; number of chars (fill screen)
-	xor dx, dx ; print at 0,0
-	mov bp, 0 ; string address (es already set)
+	inc byte [current_cluster_count]
 
-	mov ah, 0x13
+	push ax
+	mov ah, 0x0A
+	mov al, 'a'
+	mov bh, 0
+	mov bl, 0x0F
+	xor cx, cx
+	mov cl, byte [current_cluster_count]
 	int 0x10
+	pop ax
+	
+	; Get the FAT
+	; Determine fat offset = 1.5 * current_cluster
+	mov ax, word [current_cluster]
+	mov bx, ax
+	shr bx, 1
+	add ax, bx
+
+	; Determine fat sector and entry offset
+	mov bx, ax
+	shr ax, 9
+	add ax, word [ds:14]
+	and bx, 0b111111111
+	push bx
+
+	; Read the FAT
+	; Convert LSN to CHS
+	call lsn_to_chs
+
+	; Read root directory sector
+	; Read to 0x100:0 = 0x1000
+	mov bx, 0x100
+	mov es, bx
+	xor bx, bx
+
+	; cylinder already set
+	mov dh, al ; head number
+	mov cl, ah ; sector number
+	mov al, 1 ; read 1 sector
+	mov dl, byte [drive_number] ; read from boot drive
+
+	mov ah, 0x02
+	int 0x13
+
+	pop bx
+
+	; Get the next cluster number
+	mov ax, word [es:bx]
+	test word [current_cluster], 1
+	jnz .sh4
+	and ax, 0x0FFF
+	jmp .done
+.sh4:
+	shr ax, 4
+.done:
+
+	cmp ax, 0xFF8
+	jge .whole_file_read
+
+	mov word [current_cluster], ax
+	jmp .read_cluster
+
+.whole_file_read:
+	mov ah, 0x0A
+	mov al, 'd'
+	mov bh, 0
+	mov bl, 0x0F
+	mov cx, 10
+	int 0x10
+
 .halt:
 	hlt
 	jmp .halt
@@ -162,4 +232,9 @@ drive_number:
 fat_ssa:
 	resw 1
 fat_spc:
+	resb 1
+
+current_cluster:
+	resw 1
+current_cluster_count:
 	resb 1
