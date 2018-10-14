@@ -31,7 +31,7 @@ _start:
 	inc ah ; ah = sector
 
 	; read sector
-	; read to 0x100:0 = 0x100
+	; read to 0x100:0 = 0x1000
 	mov bx, 0x100
 	mov es, bx
 	xor bx, bx
@@ -45,36 +45,34 @@ _start:
 	mov ah, 0x02
 	int 0x13
 
+	; put the address of the root directory sector back
+	; just in case the int 0x13 call overwrote it
 	mov bx, 0x100
 	mov es, bx
 	xor bx, bx
 
-	push 0xB800
-	pop gs
-	xor di, di
-
 .read_entry:
 	mov al, [es:bx]
-	cmp al, 0
-	je .read_entry_done
+	test al, al
+	je .read_entry_done ; no entries left
 	cmp al, 0xE5
-	je .next_entry
+	je .next_entry ; entry is unused
 
-	push bx
-	mov cl, 8+3
-	mov ah, 0xF0
-.print_loop
-	mov al, [es:bx]
-	mov [gs:di], ax
-	
-	inc bx
-	add di, 2
-	dec cl
-	jnz .print_loop
-	pop bx
-	mov al, ' '
-	mov [gs:di], ax
-	add di, 2
+	; [es:bx] now points to a valid FAT directory entry
+	; grab the cluster number of the first cluster
+	add bx, 26 ; no worries mangling, we're never reading another file
+	mov bx, [es:bx]
+
+	; convert cluster number to LBA
+	xor ax, ax
+	mov al, [es:16] ; table_count
+	mul word [es:22] ; table_size_16
+	add ax, word [es:14] ; reserved_sector_count
+	xor dx, dx
+	div 
+
+	; we're assuming the first file is the audio
+	jmp .read_entry_done
 	
 .next_entry:
 	add bx, 32
