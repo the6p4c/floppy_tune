@@ -103,16 +103,6 @@ _start:
 
 	inc byte [current_cluster_count]
 
-	push ax
-	mov ah, 0x0A
-	mov al, 'a'
-	mov bh, 0
-	mov bl, 0x0F
-	xor cx, cx
-	mov cl, byte [current_cluster_count]
-	int 0x10
-	pop ax
-	
 	; Get the FAT
 	; Determine fat offset = 1.5 * current_cluster
 	mov ax, word [current_cluster]
@@ -165,12 +155,9 @@ _start:
 	jmp .read_cluster
 
 .whole_file_read:
-	mov ah, 0x0A
-	mov al, 'd'
-	mov bh, 0
-	mov bl, 0x0F
-	mov cx, 10
-	int 0x10
+	call dsp_reset
+	call dma_configure
+	call dsp_play
 
 .halt:
 	hlt
@@ -218,6 +205,8 @@ cn_to_lsn:
 	mul byte [fat_spc]
 	add ax, word [fat_ssa]
 	ret
+
+%include "sb16.asm"
 
 ; Ensure we're bootable - mkfs.vfat already includes a boot signature, but we'll
 ; copy our own to be safe.
