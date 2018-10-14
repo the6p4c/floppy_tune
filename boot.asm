@@ -46,6 +46,39 @@ _start:
 	mov ah, 0x02
 	int 0x13
 
+	xor dx, dx ; cursor position
+
+	; Find the first file on the drive
+.parse_entry:
+	mov al, byte [es:bx]
+	cmp al, 0
+	je .parse_finished ; no more entries in this directory
+
+	cmp al, 0xE5
+	je .next_entry ; entry was unused
+
+	; Print the file name
+	push bx ; save the current entry pointer
+
+	mov bp, bx ; string address (es:bp - es already set)
+	mov al, 1 ; write mode 1 (update cursor, no attrs)
+	xor bh, bh ; page number 0
+	mov bl, 0x0F ; attribute
+	mov cx, (8+3) ; number of characters
+
+	mov ah, 0x13
+	int 0x10
+
+	inc dh ; increment cursor row
+
+	pop bx ; restore entry pointer
+	
+.next_entry:
+	add bx, 32 ; move to next entry
+	jmp .parse_entry
+
+.parse_finished:
+
 .halt:
 	hlt
 	jmp .halt
