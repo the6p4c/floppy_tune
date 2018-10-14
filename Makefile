@@ -5,11 +5,14 @@ all: floppy.img Makefile
 clean:
 	rm -f floppy.img boot.bin
 
-run:
+run_qemu:
 	qemu-system-i386 -drive file=floppy.img,if=floppy,index=0,format=raw -soundhw sb16
 
-run_debug:
+run_qemu_debug:
 	qemu-system-i386 -drive file=floppy.img,if=floppy,index=0,format=raw -soundhw sb16 -s -S
+
+run_bochs:
+	bochs
 
 run_gdb:
 	gdb --eval-command="target remote localhost:1234" --eval-command="set architecture i8086"

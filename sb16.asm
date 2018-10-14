@@ -6,6 +6,7 @@
 %define DSP_WRITE (DSP_BASE + 0xC)
 %define DSP_READ_BUF_STATUS (DSP_BASE + 0xE)
 
+%define DSP_MXR_REG_IRQ 0x80
 %define DSP_MXR_REG_DMA 0x81
 %define DSP_CMD_OUT_SAMPLE_RATE 0x41
 
@@ -69,13 +70,60 @@ dma_configure:
 	mov al, ah
 	out DMAC1_CH1_COUNT, al ; high byte
 
+	; Enable IRQ2 on DMA block transfer finish
+	mov dx, DSP_MXR_ADDR
+	mov al, DSP_MXR_REG_IRQ
+	out dx, al
+	mov dx, DSP_MXR_DATA
+	mov al, 2 ; IRQ2
+	out dx, al
+
+	; Enable IRQ2 on PIC
+	in al, 0x21
+	and al, (~(1 << 5) & 0xFF)
+	out 0x21, al
+
+	; Enable interrupts
+	sti
+
 	; Enable dma channel
 	mov al, 1 ; ch 1
 	out DMAC1_MASK, al
 
+	push ds
+	mov ax, 0
+	mov ds, ax
+	mov word [0x34], dma_finished ; offset
+	mov word [0x36], 0 ; segment
+	pop ds
+
 	pop cx
 	pop ax
 	ret
+
+dma_finished:
+	push ax
+	push dx
+
+	; Disable dma channel
+	; mov al, 0x4 | 1 ; ch 1
+	; out DMAC1_MASK, al
+
+	mov ax, 22050*2
+	out DMAC1_CH1_ADDR, al
+	mov al, ah
+	out DMAC1_CH1_ADDR, al
+
+	; Enable dma channel
+	; mov al, 1 ; ch 1
+	; out DMAC1_MASK, al
+	
+	mov dx, 0x22F
+	in al, dx
+
+	pop dx
+	pop ax
+	iret
 
 ; Tells the SB16 to start playback.
 ;
@@ -87,10 +135,14 @@ dsp_play:
 	push cx
 	push dx
 
+	push ax
+
 	; Set sample rate
 	mov dx, DSP_WRITE
 	mov al, DSP_CMD_OUT_SAMPLE_RATE
 	out dx, al
+
+	pop ax
 	xchg al, ah
 	out dx, al
 	mov al, ah
@@ -102,7 +154,9 @@ dsp_play:
 	out dx, al
 	xor al, al ; mono, unsigned
 	out dx, al
+
 	mov ax, cx
+	dec ax
 	out dx, al
 	mov al, ah
 	out dx, al

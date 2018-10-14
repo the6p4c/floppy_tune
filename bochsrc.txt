@@ -1,0 +1,4 @@
+sb16: midimode=0, midifile=, wavemode=1, wave=, log=/dev/stdout, loglevel=0, dmatimer=750000
+
+floppya: 1_44="floppy.img", status=inserted
+boot: floppy
