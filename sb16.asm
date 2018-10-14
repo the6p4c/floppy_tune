@@ -31,67 +31,87 @@ dsp_reset:
 
 	ret
 
+; Configures a DMA transfer to send an audio buffer to the SB16.
+; Audio samples must be on a page aligned address (i.e. 0xn0000).
+;
+; Inputs:
+; 	al - Page of audio samples
+;	cx - Number of samples
 dma_configure:
-	; disable dma channel
-	mov dx, DMAC1_MASK
+	push ax
+	push cx
+
+	push ax ; save the page - popped when writing buffer addr
+
+	; Disable dma channel
 	mov al, 0x4 | 1 ; ch 1
-	out dx, al
+	out DMAC1_MASK, al
 
-	; clear byte pointer flip-flop
-	mov dx, DMAC1_BPFF
-	out dx, al
+	; Write the buffer address (page and address)
+	pop ax
+	out DMAC1_CH1_PAGE, al
 
-	; write DMA mode
-	mov dx, DMAC1_MODE
-	mov al, 0x58 | 1 ; auto-initialized playback on ch 1
-	out dx, al
-
-	; write buffer offset
-	mov dx, DMAC1_CH1_ADDR
 	xor al, al
-	out dx, al
-	mov al, 0
-	out dx, al
+	out DMAC1_CH1_ADDR, al
+	out DMAC1_CH1_ADDR, al
 
-	; write transfer length - 1
-	mov dx, DMAC1_CH1_COUNT
-	mov al, (22050 - 1) & 0xFF
-	out dx, al
-	mov al, ((22050 - 1) >> 8) & 0xFF
-	out dx, al
+	; Clear byte pointer flip-flop
+	out DMAC1_BPFF, al
 
-	; write buffer page
-	mov dx, DMAC1_CH1_PAGE
-	mov al, 1
-	out dx, al
+	; Write DMA mode
+	mov al, 0x58 | 1 ; auto-initialized playback on ch 1
+	out DMAC1_MODE, al
 
-	; enable dma channel
-	mov dx, DMAC1_MASK
+	; Write transfer length
+	mov ax, cx
+	dec ax
+	out DMAC1_CH1_COUNT, al ; low byte
+	mov al, ah
+	out DMAC1_CH1_COUNT, al ; high byte
+
+	; Enable dma channel
 	mov al, 1 ; ch 1
-	out dx, al
+	out DMAC1_MASK, al
 
+	pop cx
+	pop ax
 	ret
 
+; Tells the SB16 to start playback.
+;
+; Inputs:
+;	ax - Sample rate
+; 	cx - Number of samples
 dsp_play:
+	push ax
+	push cx
+	push dx
+
+	; Set sample rate
 	mov dx, DSP_WRITE
-	mov al, 0x41
+	mov al, DSP_CMD_OUT_SAMPLE_RATE
 	out dx, al
-	mov al, 0x56
+	xchg al, ah
 	out dx, al
-	mov al, 0x22
+	mov al, ah
 	out dx, al
 
+	; Set program
 	mov dx, DSP_WRITE
-	mov al, 0xC6
+	mov al, 0xC6 ; 8-bit DMA A/D AI
 	out dx, al
-	xor al, al
+	xor al, al ; mono, unsigned
 	out dx, al
-	mov al, (22050 - 1) & 0xFF
+	mov ax, cx
 	out dx, al
-	mov al, ((22050 - 1) >> 8) & 0xFF
+	mov al, ah
 	out dx, al
 
+	; Start playback
 	mov al, 0x1C
 	out dx, al
 
+	pop dx
+	pop cx
+	pop ax
 	ret

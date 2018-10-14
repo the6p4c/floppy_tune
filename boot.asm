@@ -156,7 +156,13 @@ _start:
 
 .whole_file_read:
 	call dsp_reset
+
+	mov al, 1 ; page number (0x10000)
+	mov cx, 22050*2 ; number of samples
 	call dma_configure
+	
+	mov ax, 22050 ; sample rate
+	mov cx, 22050*2 ; number of samples
 	call dsp_play
 
 .halt:
