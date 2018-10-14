@@ -145,7 +145,7 @@ lsn_to_chs:
 ; 	ax: LSN
 cn_to_lsn:
 	sub ax, 2
-	mul word [fat_spc]
+	mul byte [fat_spc]
 	add ax, word [fat_ssa]
 	ret
 
