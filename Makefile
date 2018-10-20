@@ -30,7 +30,7 @@ floppy.img: boot.bin music/*
 	sudo umount $(FLOPPY_MNT_DIR)
 	rmdir $(FLOPPY_MNT_DIR)
 
-boot.bin: boot.asm
+boot.bin: *.asm
 	nasm boot.asm -o boot.bin
 
 .PHONY: all clean
