@@ -5,13 +5,13 @@ all: floppy.img Makefile
 clean:
 	rm -f floppy.img src/boot.bin
 
-run_qemu:
+run_qemu: floppy.img
 	qemu-system-i386 -drive file=floppy.img,if=floppy,index=0,format=raw -soundhw sb16
 
-run_qemu_debug:
+run_qemu_debug: floppy.img
 	qemu-system-i386 -drive file=floppy.img,if=floppy,index=0,format=raw -soundhw sb16 -s -S
 
-run_bochs:
+run_bochs: floppy.img
 	bochs
 
 run_gdb:
