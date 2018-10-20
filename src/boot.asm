@@ -32,6 +32,21 @@ _start:
 	; TODO: Actually calculate this based on the BPB
 	mov word [fat_ssa], (0x0001 + 0x02 * 0x0009 + 32 * 0x00E0 / 0x0200)
 
+	; Read all FATs
+	; Number of sectors is table_size * table_count
+	mov ax, word [bpb_table_size]
+	mul byte [bpb_table_count]
+	mov dl, al
+
+	; FATs start at a LSN of reserved_sector_count
+	mov ax, word [bpb_reserved_sector_count]
+
+	; Load FATs to 0x100:0 = 0x1000
+	mov bx, 0x100
+	mov es, bx
+	xor bx, bx
+	call read_sector_lsn
+
 	; Find the first root directory sector
 	; = table_count * fat_size + reserved_sector_count
 	xor ax, ax
@@ -40,8 +55,8 @@ _start:
 	add ax, word [bpb_reserved_sector_count]
 
 	; Read root directory sector
-	; Read to 0x100:0 = 0x1000
-	mov bx, 0x100
+	; Read to 0x200:0 = 0x2000
+	mov bx, 0x200
 	mov es, bx
 	xor bx, bx
 	mov dl, 1 ; read 1 sector
@@ -71,62 +86,28 @@ _start:
 	mov byte [current_cluster_count], 0
 
 .read_cluster:
-	; Read into RAM starting from address 0x10000 (0x100:...)
+	; Read into RAM starting from address 0x10000 (0x1000:...)
 	; Since each sector is 0x200 long, we can just add ccc * 0x20 to the seg
 	xor ax, ax
 	mov al, byte [current_cluster_count]
-	shl ax, 5
+	shl ax, 5 ; equivalent to * 0x20
 	mov bx, 0x1000
 	add ax, bx
 	mov es, ax
 	xor bx, bx
 
+	; Read the cluster
 	mov ax, word [current_cluster]
 	mov dl, 1 ; read 1 sector
 	call read_sector_cn
 
 	inc byte [current_cluster_count]
 
-	; Get the FAT
-	; Determine fat offset = 1.5 * current_cluster
-	mov ax, word [current_cluster]
-	mov bx, ax
-	shr bx, 1
-	add ax, bx
+	call get_next_cluster
 
-	; Determine fat sector and entry offset
-	mov bx, ax
-	shr ax, 9
-	add ax, word [bpb_reserved_sector_count]
-	and bx, 0b111111111
-	push bx
-
-	; Read the FAT
-	; Read root directory sector to 0x100:0 = 0x1000
-	mov bx, 0x100
-	mov es, bx
-	xor bx, bx
-	mov dl, 1 ; read 1 sector
-	call read_sector_lsn
-
-	pop bx
-
-	; Get the next cluster number
-	mov ax, word [es:bx]
-	test word [current_cluster], 1
-	jnz .sh4
-	and ax, 0x0FFF
-	jmp .done
-.sh4:
-	shr ax, 4
-.done:
-
-	cmp ax, 0xFF8
-	jge .whole_file_read
-
-	mov word [current_cluster], ax
-	jmp .read_cluster
-
+	; If the cluster number is >= 0xFF8, we've reached the end of the file
+	cmp word [current_cluster], 0xFF8
+	jl .read_cluster
 .whole_file_read:
 	call dsp_reset
 
@@ -141,6 +122,43 @@ _start:
 .halt:
 	hlt
 	jmp .halt
+
+; Uses the value of current_cluster to find the next cluster of the file.
+get_next_cluster:
+	push ax
+	push bx
+	push es
+
+	; Entry offset is 1.5 * current_cluster
+	; (i.e. current_cluster + current_cluster / 2)
+	mov ax, word [current_cluster]
+	mov bx, ax
+	shr bx, 1
+	add ax, bx ; ax is now entry offset
+
+	; Read word containing next cluster number from FAT
+	mov bx, ax
+	mov ax, 0x100
+	mov es, ax
+	mov ax, word [es:bx]
+
+	; Get 12-bit cluster number from word read from FAT
+	test word [current_cluster], 1
+	jnz .high_nibbles
+
+	and ax, 0x0FFF
+	jmp .done
+
+.high_nibbles:
+	shr ax, 4
+
+.done:
+	mov word [current_cluster], ax
+
+	pop es
+	pop bx
+	pop ax
+	ret
 
 ; Reads a sector from the boot drive based on a CN (cluster number).
 ;
