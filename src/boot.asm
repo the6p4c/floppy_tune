@@ -35,23 +35,12 @@ _start:
 	mul word [ds:22] ; fat_size
 	add ax, word [ds:14] ; reserved_sector_count
 
-	; Convert LSN to CHS
-	call lsn_to_chs
-
 	; Read root directory sector
 	; Read to 0x100:0 = 0x1000
 	mov bx, 0x100
 	mov es, bx
 	xor bx, bx
-
-	; cylinder already set
-	mov dh, al ; head number
-	mov cl, ah ; sector number
-	mov al, 1 ; read 1 sector
-	mov dl, byte [drive_number] ; read from boot drive
-
-	mov ah, 0x02
-	int 0x13
+	call read_sector_lsn
 
 	; Find the first file on the drive
 .parse_entry:
@@ -77,7 +66,7 @@ _start:
 	mov byte [current_cluster_count], 0
 
 .read_cluster:
-	; Read into RAM starting from address 0x10000
+	; Read into RAM starting from address 0x10000 (0x100:...)
 	; Since each sector is 0x200 long, we can just add ccc * 0x20 to the seg
 	xor ax, ax
 	mov al, byte [current_cluster_count]
@@ -87,18 +76,8 @@ _start:
 	mov es, ax
 	xor bx, bx
 
-	; Convert CN to CHS
 	mov ax, word [current_cluster]
-	call cn_to_chs
-
-	; cylinder already set
-	mov dh, al ; head number
-	mov cl, ah ; sector number
-	mov al, byte [fat_spc] ; read the whole cluster
-	mov dl, byte [drive_number] ; read from boot drive
-
-	mov ah, 0x02
-	int 0x13
+	call read_sector_cn
 
 	inc byte [current_cluster_count]
 
@@ -117,23 +96,11 @@ _start:
 	push bx
 
 	; Read the FAT
-	; Convert LSN to CHS
-	call lsn_to_chs
-
-	; Read root directory sector
-	; Read to 0x100:0 = 0x1000
+	; Read root directory sector to 0x100:0 = 0x1000
 	mov bx, 0x100
 	mov es, bx
 	xor bx, bx
-
-	; cylinder already set
-	mov dh, al ; head number
-	mov cl, ah ; sector number
-	mov al, 1 ; read 1 sector
-	mov dl, byte [drive_number] ; read from boot drive
-
-	mov ah, 0x02
-	int 0x13
+	call read_sector_lsn
 
 	pop bx
 
@@ -168,36 +135,24 @@ _start:
 	hlt
 	jmp .halt
 
-; Converts a CN (cluster number) to a CHS (cylinder head sector).
-; Requires fat_ssa and fat_spc to be pre-calculated.
-;
-; LSN = (CN - 2) * fat_spc + fat_ssa
+; Reads a sector from the boot drive based on a CN (cluster number).
 ;
 ; Inputs:
 ; 	ax: CN
-; Outputs:
-; 	See lsn_to_chs
-; Clobbers:
-;	See lsn_to_chs
-cn_to_chs:
+;	es:bx: Address to read to
+read_sector_cn:
 	sub ax, 2
 	mul byte [fat_spc]
 	add ax, word [fat_ssa]
 	; Fall through to lsn_to_chs - ax contains the LSN we converted the CN
 	; to.
 
-; Converts a LSN (logical sector number) to a CHS (cylinder head sector)
-; address.
+; Reads a sector from the boot drive based on a LSN (logical sector number).
 ;
 ; Inputs:
 ; 	ax: LSN
-; Outputs:
-; 	al: Head number
-; 	ah: Sector number
-;	ch: Cylinder number
-; Clobbers:
-;	cl
-lsn_to_chs:
+;	es:bx: Address to read to
+read_sector_lsn:
 	mov cl, 18 ; number of sectors per track
 	div cl ; al = head number + cyl number * heads/cyl, ah = sector - 1
 	inc ah ; ah = sector
@@ -211,6 +166,24 @@ lsn_to_chs:
 	mov ch, al
 	mov al, ah
 	mov ah, cl
+	; Fall through to read_sector - al, ah and ch contain the head number,
+	; sector number and cylinder number respectively.
+
+; Reads a sector from the boot drive based on a CHS (cylinder head sector).
+;
+; Inputs:
+; 	ch: Cylinder number
+;	al: Head number
+;	ah: Sector number
+read_sector:
+	; cylinder already set
+	mov dh, al ; head number
+	mov cl, ah ; sector number
+	mov al, 1 ; read 1 sector
+	mov dl, byte [drive_number] ; read from boot drive
+
+	mov ah, 0x02
+	int 0x13
 
 	ret
 
