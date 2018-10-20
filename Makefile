@@ -19,8 +19,8 @@ run_gdb:
 
 floppy.img: src/boot.bin music/*
 	# build floppy image
-	dd if=/dev/zero of=floppy.img bs=1024 count=1440
-	mkfs.vfat -F 12 floppy.img
+	rm -f floppy.img
+	mkfs.vfat -C -F 12 floppy.img 1440
 	dd conv=notrunc if=src/boot.bin of=floppy.img bs=1 count=3 # jmp
 	dd conv=notrunc if=src/boot.bin skip=62 of=floppy.img seek=62 bs=1 count=448 # bootstrap
 
