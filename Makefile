@@ -15,7 +15,7 @@ run_bochs:
 	bochs
 
 run_gdb:
-	gdb --eval-command="target remote localhost:1234" --eval-command="set architecture i8086"
+	gdb
 
 floppy.img: boot.bin music/*
 	# build floppy image
