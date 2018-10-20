@@ -89,8 +89,7 @@ _start:
 
 	; Convert CN to CHS
 	mov ax, word [current_cluster]
-	call cn_to_lsn
-	call lsn_to_chs
+	call cn_to_chs
 
 	; cylinder already set
 	mov dh, al ; head number
@@ -169,6 +168,24 @@ _start:
 	hlt
 	jmp .halt
 
+; Converts a CN (cluster number) to a CHS (cylinder head sector).
+; Requires fat_ssa and fat_spc to be pre-calculated.
+;
+; LSN = (CN - 2) * fat_spc + fat_ssa
+;
+; Inputs:
+; 	ax: CN
+; Outputs:
+; 	See lsn_to_chs
+; Clobbers:
+;	See lsn_to_chs
+cn_to_chs:
+	sub ax, 2
+	mul byte [fat_spc]
+	add ax, word [fat_ssa]
+	; Fall through to lsn_to_chs - ax contains the LSN we converted the CN
+	; to.
+
 ; Converts a LSN (logical sector number) to a CHS (cylinder head sector)
 ; address.
 ;
@@ -195,21 +212,6 @@ lsn_to_chs:
 	mov al, ah
 	mov ah, cl
 
-	ret
-
-; Converts a CN (cluster number) to a LSN (logical sector number).
-; Requires fat_ssa and fat_spc to be pre-calculated.
-;
-; LSN = (CN - 2) * fat_spc + fat_ssa
-;
-; Inputs:
-; 	ax: CN
-; Outputs:
-; 	ax: LSN
-cn_to_lsn:
-	sub ax, 2
-	mul byte [fat_spc]
-	add ax, word [fat_ssa]
 	ret
 
 %include "sb16.asm"
