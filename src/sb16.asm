@@ -103,25 +103,24 @@ dma_configure:
 
 dma_finished:
 	push ax
+	push bx
 	push dx
 
-	; Disable dma channel
-	; mov al, 0x4 | 1 ; ch 1
-	; out DMAC1_MASK, al
+	mov ah, 0x0E
+	mov al, '!'
+	mov bh, 0
+	int 0x10
 
-	mov ax, 22050*2
-	out DMAC1_CH1_ADDR, al
-	mov al, ah
-	out DMAC1_CH1_ADDR, al
-
-	; Enable dma channel
-	; mov al, 1 ; ch 1
-	; out DMAC1_MASK, al
-	
-	mov dx, 0x22F
+	; DSP interrupt acknowledge
+	mov dx, 0x22E
 	in al, dx
 
+	; PIC interrupt acknowledge
+	mov al, 0x20
+	out 0x20, al
+
 	pop dx
+	pop bx
 	pop ax
 	iret
 
@@ -159,6 +158,14 @@ dsp_play:
 	dec ax
 	out dx, al
 	mov al, ah
+	out dx, al
+
+	; Set block size to half the buffer size
+	mov al, 0x48
+	out dx, al
+	mov al, (22050 - 1) & 0xFF
+	out dx, al
+	mov al, ((22050 - 1) >> 8) & 0xFF
 	out dx, al
 
 	; Start playback
