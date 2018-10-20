@@ -5,6 +5,13 @@
 jmp _start
 nop
 
+resb 10
+bpb_sectors_per_cluster: resb 1
+bpb_reserved_sector_count: resb 2
+bpb_table_count: resb 1
+resb 5
+bpb_table_size: resb 2
+
 ; Fill the boot binary with 0s until the bootstrap region of the FAT header.
 ; This won't be copied into the floppy image, but it just here so the code below
 ; starts at the right org and address in the file.
@@ -17,23 +24,20 @@ _start:
 	; dl contains drive number - save it to be used later
 	mov byte [drive_number], dl
 
-	; Set up segmentation to read from the boot record
-	mov ax, 0x7C0
+	; Set up data segment
+	mov ax, 0
 	mov ds, ax
 
-	; Read/calculate some necessary constants
-	mov al, byte [ds:13]
-	mov byte [fat_spc], al
-
+	; Calculate a required constant
 	; TODO: Actually calculate this based on the BPB
 	mov word [fat_ssa], (0x0001 + 0x02 * 0x0009 + 32 * 0x00E0 / 0x0200)
 
 	; Find the first root directory sector
 	; = table_count * fat_size + reserved_sector_count
 	xor ax, ax
-	mov al, byte [ds:16] ; table_count
-	mul word [ds:22] ; fat_size
-	add ax, word [ds:14] ; reserved_sector_count
+	mov al, byte [bpb_table_count]
+	mul word [bpb_table_size]
+	add ax, word [bpb_reserved_sector_count]
 
 	; Read root directory sector
 	; Read to 0x100:0 = 0x1000
@@ -93,7 +97,7 @@ _start:
 	; Determine fat sector and entry offset
 	mov bx, ax
 	shr ax, 9
-	add ax, word [ds:14]
+	add ax, word [bpb_reserved_sector_count]
 	and bx, 0b111111111
 	push bx
 
@@ -146,7 +150,7 @@ _start:
 ;	es:bx: Address to read to
 read_sector_cn:
 	sub ax, 2
-	mul byte [fat_spc]
+	mul byte [bpb_sectors_per_cluster]
 	add ax, word [fat_ssa]
 	; Fall through to lsn_to_chs - ax contains the LSN we converted the CN
 	; to.
@@ -202,14 +206,10 @@ TIMES 510 - ($ - $$) db 0x00
 db 0x55
 db 0xAA
 
-; TODO: Fix the segmentation issues here - I have no clue where these variables
-; are actually being stored
 drive_number:
 	resb 1
 fat_ssa:
 	resw 1
-fat_spc:
-	resb 1
 
 current_cluster:
 	resw 1
