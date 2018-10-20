@@ -1,3 +1,22 @@
+%define DSP_BASE 0x220
+%define DSP_MXR_ADDR (DSP_BASE + 0x4)
+%define DSP_MXR_DATA (DSP_BASE + 0x5)
+%define DSP_RESET (DSP_BASE + 0x6)
+%define DSP_READ (DSP_BASE + 0xA)
+%define DSP_WRITE (DSP_BASE + 0xC)
+%define DSP_READ_BUF_STATUS (DSP_BASE + 0xE)
+
+%define DSP_MXR_REG_IRQ 0x80
+%define DSP_MXR_REG_DMA 0x81
+%define DSP_CMD_OUT_SAMPLE_RATE 0x41
+
+%define DMAC1_CH1_ADDR 0x02
+%define DMAC1_CH1_COUNT 0x03
+%define DMAC1_CH1_PAGE 0x83
+%define DMAC1_MASK 0x0A
+%define DMAC1_MODE 0x0B
+%define DMAC1_BPFF 0x0C
+
 [bits 16]
 [org 0x7C00]
 
@@ -109,19 +128,104 @@ _start:
 	cmp word [current_cluster], 0xFF8
 	jl .read_cluster
 .whole_file_read:
-	call dsp_reset
+	; Reset the DSP
+	mov dx, DSP_RESET
+	mov al, 1
+	out dx, al ; write the 1
 
-	mov al, 1 ; page number (0x10000)
-	mov cx, 22050*2 ; number of samples
-	call dma_configure
-	
-	mov ax, 22050 ; sample rate
-	mov cx, 22050*2 ; number of samples
-	call dsp_play
+	xor al, al
+	out dx, al ; write the 0
 
+	; Configure DMA
+	; Disable dma channel
+	mov al, 0x4 | 1 ; ch 1
+	out DMAC1_MASK, al
+
+	; Write the buffer address (page and address)
+	mov al, 1
+	out DMAC1_CH1_PAGE, al
+
+	xor al, al
+	out DMAC1_CH1_ADDR, al
+	out DMAC1_CH1_ADDR, al
+
+	; Clear byte pointer flip-flop
+	out DMAC1_BPFF, al
+
+	; Write DMA mode
+	mov al, 0x58 | 1 ; auto-initialized playback on ch 1
+	out DMAC1_MODE, al
+
+	; Write transfer length
+	mov al, (22050 * 2 - 1) & 0xFF
+	out DMAC1_CH1_COUNT, al ; low byte
+	mov al, ((22050 * 2 - 1) >> 8) & 0xFF
+	out DMAC1_CH1_COUNT, al ; high byte
+
+	; Enable IRQ2 on DMA block transfer finish
+	mov dx, DSP_MXR_ADDR
+	mov al, DSP_MXR_REG_IRQ
+	out dx, al
+	mov dx, DSP_MXR_DATA
+	mov al, 2 ; IRQ2
+	out dx, al
+
+	; Enable IRQ2 on PIC
+	in al, 0x21
+	and al, (~(1 << 5) & 0xFF)
+	out 0x21, al
+
+	; Enable interrupts
+	sti
+
+	; Enable dma channel
+	mov al, 1 ; ch 1
+	out DMAC1_MASK, al
+
+	; Set DMA interrupt address
+	mov word [0x34], dma_finished ; offset
+	mov word [0x36], 0 ; segment
+
+	; Play the samples
+	; Set sample rate
+	mov dx, DSP_WRITE
+	mov al, DSP_CMD_OUT_SAMPLE_RATE
+	out dx, al
+	mov al, (8000 >> 8) & 0xFF
+	out dx, al
+	mov al, 8000 & 0xFF
+	out dx, al
+
+	; Set program
+	mov dx, DSP_WRITE
+	mov al, 0xC6 ; 8-bit DMA A/D AI
+	out dx, al
+	xor al, al ; mono, unsigned
+	out dx, al
+
+	mov ax, cx
+	dec ax
+	out dx, al
+	mov al, ah
+	out dx, al
+
+	; Set block size to half the buffer size
+	mov al, 0x48
+	out dx, al
+	mov al, (22050 - 1) & 0xFF
+	out dx, al
+	mov al, ((22050 - 1) >> 8) & 0xFF
+	out dx, al
+
+	; Start playback
+	mov al, 0x1C
+	out dx, al
 .halt:
 	hlt
 	jmp .halt
+
+dma_finished:
+	iret
 
 ; Uses the value of current_cluster to find the next cluster of the file.
 get_next_cluster:
@@ -215,8 +319,6 @@ read_sector:
 	int 0x13
 
 	ret
-
-%include "sb16.asm"
 
 ; Ensure we're bootable - mkfs.vfat already includes a boot signature, but we'll
 ; copy our own to be safe.
