@@ -40,6 +40,7 @@ _start:
 	mov bx, 0x100
 	mov es, bx
 	xor bx, bx
+	mov dl, 1 ; read 1 sector
 	call read_sector_lsn
 
 	; Find the first file on the drive
@@ -77,6 +78,7 @@ _start:
 	xor bx, bx
 
 	mov ax, word [current_cluster]
+	mov dl, 1 ; read 1 sector
 	call read_sector_cn
 
 	inc byte [current_cluster_count]
@@ -100,6 +102,7 @@ _start:
 	mov bx, 0x100
 	mov es, bx
 	xor bx, bx
+	mov dl, 1 ; read 1 sector
 	call read_sector_lsn
 
 	pop bx
@@ -139,6 +142,7 @@ _start:
 ;
 ; Inputs:
 ; 	ax: CN
+;	dl: Number of sectors to read
 ;	es:bx: Address to read to
 read_sector_cn:
 	sub ax, 2
@@ -151,6 +155,7 @@ read_sector_cn:
 ;
 ; Inputs:
 ; 	ax: LSN
+;	dl: Number of sectors to read
 ;	es:bx: Address to read to
 read_sector_lsn:
 	mov cl, 18 ; number of sectors per track
@@ -175,11 +180,13 @@ read_sector_lsn:
 ; 	ch: Cylinder number
 ;	al: Head number
 ;	ah: Sector number
+;	dl: Number of sectors to read
+;	es:bx: Address to read to
 read_sector:
-	; cylinder already set
+	; cylinder (ch) already set
 	mov dh, al ; head number
+	mov al, dl ; sector count
 	mov cl, ah ; sector number
-	mov al, 1 ; read 1 sector
 	mov dl, byte [drive_number] ; read from boot drive
 
 	mov ah, 0x02
